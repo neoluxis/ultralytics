@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import math
+import os
 
 import torch
 import torch.nn as nn
@@ -154,6 +155,16 @@ class Detect(nn.Module):
             preds = {"one2many": preds, "one2one": one2one}
         if self.training:
             return preds
+
+        if self.export and os.getenv("ULTRALYTICS_EXPORT_FORMAT", "").lower() == "rknn":
+            outputs = []
+            for i in range(self.nl):
+                outputs.append(self.cv2[i](x[i]))
+                cls = torch.sigmoid(self.cv3[i](x[i]))
+                outputs.append(cls)
+                outputs.append(torch.clamp(cls.sum(1, keepdim=True), 0, 1))
+            return outputs
+
         y = self._inference(preds["one2one"] if self.end2end else preds)
         if self.end2end:
             y = self.postprocess(y.permute(0, 2, 1))
